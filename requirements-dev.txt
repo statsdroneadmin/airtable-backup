@@ -1,0 +1,14 @@
+# Plugin-author dev dependencies (B207).
+#
+# Installed once per machine. Drives the optional checks in
+# scripts/preflight.sh: without PyYAML, manifest validity (check 7 in
+# remote v0.3.0+ preflight: field-secrecy audit) silently degrades. With
+# PyYAML installed, the audit catches real bugs.
+#
+# Install:  pip install -r requirements-dev.txt
+#
+# This is separate from anything the running plugin needs — runtime deps
+# live on the NousViz host's Python env, managed by core. Plugins don't
+# ship a runtime requirements.txt.
+
+pyyaml>=6.0

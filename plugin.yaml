@@ -1,0 +1,222 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# plugin.yaml — airtable-backup
+#
+# This is the manifest the NousViz install handler reads. Every field is
+# documented inline. Keep this file at the plugin root.
+#
+# When you scaffold a new plugin via `scripts/new-plugin.sh`, every
+# `airtable-backup` / `airtable_backup` / `Example` here is rewritten to
+# your slug. Don't manually edit before running the script.
+#
+# Reference: docs/02-plugin-contract.md
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Identity ────────────────────────────────────────────────────────────────────
+# `name` is the slug. Must match the repo name (minus a leading `plugin-`
+# if present). Lowercase, hyphens, no spaces. Used as URL prefix.
+name: airtable-backup
+display_name: Airtable Backup
+version: 0.1.0
+description: >
+  A minimal NousViz plugin scaffold demonstrating manifest, migrations,
+  sync, hooks, dashboards, and a custom widget. Replace this with what
+  your plugin actually does.
+
+license: MIT
+icon: package                      # Lucide icon name. See lucide.dev/icons.
+# Allowed categories: analytics, content, monitoring, integration,
+# productivity, compliance, premium, community. See docs/02-plugin-contract.md.
+category: integration
+tags: [example, scaffold]
+# Allowed visibility values: public, public_premium, fully_private.
+# Use fully_private for first-party/internal plugins (install via direct URL only).
+visibility: fully_private
+
+publisher:
+  slug: your-org
+  # `name` is shown to operators on the /plugins installed-list and on the
+  # marketplace card (NousViz core v0.9.5.8 / B185). Set it to your real
+  # org or display name; placeholders like "Your Org" or "TBD" leak into
+  # the operator UI.
+  name: Your Org
+  # contact_email is optional — uncomment and set before tagging your release.
+  # contact_email: ops@your-org.example
+
+repository: git@github.com:your-org/plugin-airtable-backup.git
+
+
+# Long description (Markdown) ─────────────────────────────────────────────────
+# Shown on the plugin page's About tab. Keep concise.
+
+long_description: |
+  ## What this plugin does
+
+  Replace this paragraph with what your plugin actually does. Pull
+  data from where, render what, on what schedule.
+
+  ## Setup
+
+  1. Install via the marketplace (private SSH URL).
+  2. In Settings, configure connection.
+  3. Click "Test connection" to verify.
+  4. Click "Run sync" to populate the table.
+
+
+# Infrastructure requirements ─────────────────────────────────────────────────
+
+requires:
+  postgres: true
+  postgres_version: "14"
+
+
+# Connections ─────────────────────────────────────────────────────────────────
+# Credentials and non-secret config the operator fills in. Secret fields
+# (password, file with secret:true) go to the encrypted `credentials` table;
+# non-secret fields go to `plugin_settings`.
+#
+# Reference: docs/02-plugin-contract.md "Connections"
+
+connections:
+  - name: example_api
+    type: api_key
+    required: true
+    env_prefix: EXAMPLE_                # Legacy compat; can ignore on new plugins
+    label: Example API
+    description: >
+      Replace this with what your external API needs.
+    fields:
+      - name: api_key
+        label: API Key
+        type: password                  # secret — goes to credentials table
+        required: true
+        description: API key from your external service.
+
+      - name: base_url
+        label: Base URL
+        type: url                       # non-secret — plugin_settings
+        required: false
+        scheme: https
+        default: https://api.example.com
+        description: Override only for non-production endpoints.
+
+
+# Databases ───────────────────────────────────────────────────────────────────
+# Tables this plugin owns. Listed here so core can grant SELECT to the
+# nousviz_plugin role at install time. The `table_prefix` is convention:
+# all your tables start with this prefix to avoid collisions with sibling
+# plugins.
+
+databases:
+  postgres:
+    table_prefix: airt_                   # adjust per-plugin; keep short
+    tables:
+      - airt_items
+      - airt_sync_state
+
+
+# Navigation ──────────────────────────────────────────────────────────────────
+# How the plugin appears in the sidebar. Single entry = collapses to one
+# sidebar link. Multiple entries = expandable group. The path matches
+# /plugin/<slug> by default; if you have multiple dashboards, use multiple
+# entries with /plugin/<slug>/<dashboard-name> hrefs.
+
+navigation:
+  - label: Example
+    path: /plugin/airtable-backup
+    icon: Package
+
+
+# Dashboards ──────────────────────────────────────────────────────────────────
+# Tab definitions. Each dashboard becomes a tab on the plugin page.
+# `name` is the URL slug after /plugin/<slug>/; `file` is relative to plugin root.
+
+dashboards:
+  - name: overview
+    label: Overview
+    file: dashboards/overview.yaml
+
+
+# Sync ────────────────────────────────────────────────────────────────────────
+# Periodic data import. See docs/06-sync-and-jobs.md.
+# `execution_mode: async` is right for almost every real plugin — runs
+# in the jobs-worker, no 10-minute HTTP cap, cancellable.
+
+sync:
+  script: src/airtable_backup_sync.py
+  schedule: "0 */6 * * *"               # every 6 hours; cron 5-field
+  supports_incremental: false
+  execution_mode: async
+  concurrency_policy: skip_if_running
+  timeout_seconds: 1800
+
+
+# Lifecycle hooks ─────────────────────────────────────────────────────────────
+# Python callbacks fired on plugin events. See docs/06-sync-and-jobs.md
+# "Lifecycle hooks". Each value is `<module-path>:<function-name>` relative
+# to the plugin root.
+
+hooks:
+  on_credentials_saved:   hooks.lifecycle:on_credentials_saved
+  on_first_run_success:   hooks.lifecycle:on_first_run_success
+
+
+# Declarative actions ─────────────────────────────────────────────────────────
+# Buttons that appear in standard slots on the plugin page. Each fires a
+# route in api/routes.py. The route returns a `{toast, level, navigate?}`
+# dict and core renders it.
+#
+# Available slots: settings_tab_footer | plugin_page_header
+# Predicates for `disabled_when` / `visible_when`: see plugin_predicates.py
+
+actions:
+  - id: test_connection
+    label: Test connection
+    slot: settings_tab_footer
+    style: secondary
+    icon: check-circle
+    endpoint: POST /api/plugins/airtable-backup/test-connection
+    disabled_when: no_credentials
+
+  - id: run_sync
+    label: Run sync
+    slot: settings_tab_footer
+    style: primary
+    icon: download
+    endpoint: POST /api/plugins/airtable-backup/sync-now
+    confirm: "Trigger a full sync now?"
+    disabled_when: sync_in_progress
+
+
+# Setup checklist ─────────────────────────────────────────────────────────────
+# Onboarding ladder shown on the plugin page until all items are done.
+# Each item's `done_if` is a predicate name; predicate definitions in
+# plugin_predicates.py.
+
+setup_checklist:
+  show_until: all_done
+  items:
+    - id: save_credentials
+      label: Configure connection
+      done_if: credentials_saved
+    - id: test_connection
+      label: Verify connection — click "Test connection"
+      done_if: last_test_success
+    - id: first_sync
+      label: Run the first sync
+      done_if: first_sync_success
+    - id: schedule_live
+      label: Confirm automatic sync is scheduled
+      done_if: schedule_active
+
+
+# Frontend components (B151, NousViz core v0.9.4+) ───────────────────────────
+# Plugin-shipped React widgets. Each `path` is relative to plugin root and
+# must end .js. Build via `cd widget && ./build.sh` — output is committed
+# to widget/dist/ so the install handler can serve it.
+#
+# Reference: docs/05-widgets-custom-react.md
+
+frontend:
+  components:
+    - name: AirtableBackupKpiCard
+      path: widget/dist/AirtableBackupKpiCard.js

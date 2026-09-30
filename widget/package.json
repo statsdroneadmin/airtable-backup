@@ -1,0 +1,16 @@
+{
+  "name": "airtable-backup-widgets",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Plugin-shipped React widgets for airtable-backup.",
+  "scripts": {
+    "build": "./build.sh",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.0",
+    "esbuild": "^0.21.0",
+    "typescript": "^5.4.0"
+  }
+}

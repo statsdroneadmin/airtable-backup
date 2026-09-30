@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(git status:*)",
+      "Bash(git log:*)",
+      "Bash(git diff:*)",
+      "Bash(git show:*)",
+      "Bash(git ls-files:*)",
+      "Bash(git ls-remote:*)",
+      "Bash(git branch:*)",
+      "Bash(git tag --list:*)",
+      "Bash(git tag --points-at:*)",
+      "Bash(git remote -v)",
+      "Bash(git remote get-url:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(git describe:*)",
+      "Bash(git add:*)",
+
+      "Bash(grep:*)",
+      "Bash(rg:*)",
+      "Bash(find:*)",
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(wc:*)",
+      "Bash(file:*)",
+
+      "Bash(npm install)",
+      "Bash(npm install:*)",
+      "Bash(npm run typecheck)",
+      "Bash(npm run build)",
+      "Bash(./build.sh)",
+      "Bash(./widget/build.sh)",
+      "Bash(cd widget && npm install)",
+      "Bash(cd widget && ./build.sh)",
+      "Bash(cd widget && npm run typecheck)",
+
+      "Bash(python3 -c:*)",
+      "Bash(python3 -m:*)",
+
+      "Bash(./scripts/smoke-test.sh)",
+      "Bash(scripts/smoke-test.sh)",
+      "Bash(./scripts/diagnose.sh)",
+      "Bash(scripts/diagnose.sh)",
+      "Bash(./scripts/preflight.sh)",
+      "Bash(scripts/preflight.sh)",
+      "Bash(./scripts/validate-manifest.py)",
+      "Bash(scripts/validate-manifest.py)",
+
+      "Bash(curl -s:*)",
+      "Bash(curl -i:*)",
+      "Bash(jq:*)"
+    ],
+    "ask": [
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git tag:*)",
+      "Bash(git rebase:*)",
+      "Bash(git merge:*)",
+      "Bash(git reset:*)",
+      "Bash(git restore:*)",
+      "Bash(git checkout:*)",
+      "Bash(git revert:*)",
+      "Bash(git clean:*)",
+      "Bash(rm:*)",
+      "Bash(mv:*)",
+      "Bash(gh repo create:*)",
+      "Bash(gh pr:*)",
+      "Bash(gh release:*)",
+      "Bash(pm2:*)",
+      "Bash(ssh:*)",
+      "Bash(psql:*)"
+    ],
+    "deny": [
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git push --no-verify:*)",
+      "Bash(git commit --no-verify:*)",
+      "Bash(rm -rf /:*)",
+      "Bash(sudo:*)"
+    ]
+  }
+}

@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# Widget build — node_modules ignored, but widget/dist/ MUST be committed
+# because operators install via git clone and core's widget loader serves
+# the prebuilt JS from widget/dist/<name>.js. Negations override the
+# broad `dist/` Python rule above.
+widget/node_modules/
+!widget/dist/
+!widget/dist/*
+
+# Environment
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temp
+*.tmp
