@@ -1,98 +1,63 @@
 # airtable-backup
 
-A NousViz plugin scaffold. After running `scripts/new-plugin.sh` from the parent guide repo, this README is renamed for your plugin and you start editing.
+A NousViz plugin that keeps a complete, self-hosted backup of an Airtable
+account, pulled with a Personal Access Token. Read-only toward Airtable.
 
-This file is what operators read when they look at your plugin's GitHub page or marketplace listing. Replace this paragraph with what your plugin actually does.
+## What it backs up
 
----
+| Airtable | Stored in | Notes |
+|---|---|---|
+| Bases | `atb_bases` | Every base the token can see; bases that disappear are flagged, not dropped |
+| Tables: fields + views | `atb_tables`, `atb_schema_history` | Snapshot on every schema change |
+| Records | `atb_records` | JSONB keyed by **field ID** (stable across renames); deleted records kept |
+| Record changes | `atb_record_changes` | created / updated (previous values) / deleted / restored |
+| Attachment files | `atb_attachments` | **Bytes stored** (Airtable's URLs expire after 2 h); each file fetched once |
+| Comments (optional) | `atb_comments` | Fetched only for records whose comment count changed |
 
-## What this plugin does
-
-(Describe the use case in 2-3 paragraphs. Who is this for, what does it pull in, what does it surface.)
-
----
+Not available from the Airtable API, so not backed up: automations,
+interfaces, extensions, and view filter/sort/visibility settings (only each
+view's ID, name and type).
 
 ## Setup
 
-1. **Install** via NousViz's "Add private plugin" flow with the SSH URL of this repo.
-2. **Configure connection** on the Settings tab. Paste API key + base URL (default works for production).
-3. **Test connection** — click the action button. You should see a success toast.
-4. **Run sync** — click the action button. Wait ~30 seconds for the first sync to complete.
-5. **Trust frontend** — if a banner appears, click "Trust this plugin" then hard-refresh.
+1. Create a token at <https://airtable.com/create/tokens>:
+   - scopes `data.records:read`, `schema.bases:read`
+     (+ `data.recordComments:read` to back up comments)
+   - access: the bases or workspaces to back up
+2. Install via NousViz "Install from Git":
+   `git@github.com:statsdroneadmin/airtable-backup.git` → **Trust** → hard-refresh.
+3. Settings → paste the token → **Test connection** → **Run sync**.
+4. It then runs daily at 03:00 UTC.
 
-The setup checklist on the plugin page guides you through these steps.
+Settings: *Bases to include* (comma-separated names/IDs; blank = all),
+*Download attachment files* (default yes), *Max attachment size (MB)*
+(default 100), *Back up record comments* (default no).
 
----
+## How a sync works
 
-## Modules / Tabs
+Each run re-reads everything, because Airtable has no "modified since" filter
+unless every table has a Last-modified field. Records are hashed after removing
+the expiring attachment URLs, so an unchanged record costs one cheap UPDATE per
+page and no change row. The first complete pass of a table is a baseline with no
+change rows. Records are marked deleted **only after a complete pass**: a
+cancelled, timed-out or failed pass never deletes anything. Bases are processed
+least-recently-synced first, so a run that hits the 4-hour timeout still moves
+the backup forward across runs. The sync stays under Airtable's 5 requests/second
+per base limit and waits 30 seconds after a 429.
 
-- **Overview** — KPI tiles, items-by-category chart, recent items table.
+## Overview page
 
-(Add more sections as you add tabs.)
-
----
-
-## Data
-
-- Imports into `airt_items` (rename to fit your domain) on a 6-hourly cron.
-- Sync is idempotent — running it twice produces the same state.
-- Schema in `storage/migrations/`.
-
----
-
-## Operator runbook
-
-### Deploy key (one per plugin)
-
-NousViz core v0.9.5.9 (ticket B204) requires a per-repo deploy key. A single `github.com`-wide key no longer works — each plugin's repo needs its own entry registered against the exact `repo_url` (e.g. `git@github.com:<your-org>/plugin-example.git`).
-
-Set this up via **Settings → Deploy Keys → Add deploy key** in the NousViz admin UI. Paste the private key, set the repo URL exactly, click the row's **Test** button to confirm. If you skip this step or use a key registered for a different repo, the install / update flow fails with `Permission denied (publickey)` and a `/system/logs` entry pointing you here.
-
-Full walkthrough: see `docs/12-installing-on-nousviz.md` Step 1 in the [nousviz-plugin-authoring](https://github.com/JoeHatch/nousviz-plugin-authoring) guide.
-
-### When something goes wrong
-
-| Symptom | Where to look |
-|---|---|
-| Setup checklist stuck at N/4 | Each item maps to a predicate — see `plugin.yaml`'s `setup_checklist` block. Cross-reference `docs/appendix-gotchas.md G-6` in the parent guide. |
-| Plugin install fails | `/system/logs?source=plugin_install` (since core v0.9.5.9 / B203). Look for `[airtable-backup]` prefix on log lines. |
-| Plugin update / "Check for updates" fails | `/system/logs?source=plugin_update`. Common cause: missing per-repo deploy key (B204 — see above). |
-| Sync fails | `/system/logs?source=sync&plugin_id=airtable-backup` |
-| Action button shows error toast | Read the toast text — it includes the exception class. Full traceback at `/system/logs?source=plugin_route` |
-| Hook (install / on_install / on_uninstall) failed | `/system/logs?source=plugin_install` or `?source=plugin_uninstall` (since core v0.9.5.9 / B203). |
-| Custom widget shows placeholder card | Trust the plugin or hard-refresh. If still broken, browser console has the error |
-
----
+KPIs, a base → table → record browser with search and "include deleted", a
+record drawer (all fields, attachment downloads, change history, comments),
+recent changes, and exports: a table as CSV or JSON, a whole base as JSON.
 
 ## Development
 
 ```bash
-# One-time setup (only if you ship a custom widget)
-cd widget && npm install
-
-# Make changes, then rebuild widget
-cd widget && ./build.sh
-
-# Quick "did the code work?" check (no NousViz core checkout needed)
-/path/to/nousviz-plugin-authoring/scripts/smoke-test.sh
-
-# Pre-tag release-readiness (security audit + bundle hygiene)
-/path/to/nousviz-plugin-authoring/scripts/preflight.sh
-
-# Commit + tag + push
-git add -A && git commit -m "feat: ..."
-git tag -a v0.1.1 -m "v0.1.1 — ..."
-git push origin main && git push origin v0.1.1
+cd widget && npm install && npm run typecheck && ./build.sh   # commit widget/dist/*.js
+~/devhub/sdk-plugins/scripts/smoke-test.sh
+~/devhub/sdk-plugins/scripts/preflight.sh
 ```
 
-The version in `plugin.yaml` and the git tag must match.
-
-You don't need a local NousViz core checkout to develop this plugin — the install-time validator on your NousViz instance catches manifest and import errors. See `docs/01-getting-started.md` "Two paths to choose between" in the parent guide for the rare cases where a checkout helps.
-
----
-
-## Updating
-
-Operators update by clicking **Update** on the plugin's Settings page. NousViz pulls the latest `v*` tag and runs migrations. If `frontend.components` changed, the operator must re-trust the plugin.
-
-Update notes go in `CHANGELOG.md` per release. The first line under each version's heading is what operators see.
+HTTP uses stdlib `urllib` only: `requests`/`httpx` are not guaranteed on the
+NousViz host.

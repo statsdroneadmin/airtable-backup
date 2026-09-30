@@ -6,35 +6,46 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
-(Draft your CHANGELOG entry here BEFORE writing code. See `PLAN.md` for the SOP.)
-
 ---
 
-## [0.1.0] — Initial scaffold
+## [0.1.0] — Airtable account backup
 
 ### Added
 
-- Plugin manifest declaring connection (api_key + base_url), database (`airt_items`), navigation, dashboards, sync, hooks, actions, setup checklist, and one frontend widget.
-- One Postgres migration creating `airt_items` and `airt_sync_state`.
-- Sync script subclassing `BaseSyncScript` — populates `airt_items` from a fixture (replace with real fetch).
-- HTTP routes: `/health-check`, `/test-connection`, `/sync-now`, `/overview`, `/items`, `/items/filters`.
-- Lifecycle hooks: `on_credentials_saved`, `on_first_run_success`.
-- Overview dashboard with one stat KPI, one bar chart, one custom-widget panel, one declarative table.
-- One custom React widget (`AirtableBackupKpiCard`) demonstrating the v0.9.4.7+ build pipeline (alias + external for `react` and `react/jsx-runtime`).
+- Backs up every Airtable base your Personal Access Token can see (or a chosen
+  subset) into NousViz: base and table schema (fields, views), every record,
+  attachment files, and optionally record comments.
+- **Attachments are downloaded and stored**, because Airtable's attachment
+  links expire 2 hours after they are issued. Each file is fetched once.
+- **Change log.** Each sync compares every record with the stored copy and
+  records what was created, updated (with the previous values), deleted or
+  restored. Deleted records are kept, with their last values.
+- **Schema history.** A table's fields and views are snapshotted whenever they
+  change.
+- **Overview page:** backup totals, a base → table → record browser with
+  search, a record drawer (all fields, attachment downloads, change history,
+  comments), and recent changes.
+- **Export:** a table as CSV or JSON, or a whole base (schema + records) as JSON.
+- Daily automatic sync (03:00 UTC) plus a **Run sync** button. Stays within
+  Airtable's rate limit (5 requests/second per base).
+
+### Token scopes
+
+Create the token at airtable.com/create/tokens with:
+`data.records:read`, `schema.bases:read`, and (only for comments)
+`data.recordComments:read`. Give it access to the bases (or workspaces) you want
+backed up. The plugin never writes to Airtable.
+
+### Operator workflow on first install
+
+- Install → click **Trust this plugin** → hard-refresh the page once.
+- Settings → paste the token → **Test connection** → **Run sync**.
+- The first sync is a baseline and records no changes; later syncs record
+  changes.
 
 ### Plugin author release checklist (every release)
 
 1. Bump `version:` in `plugin.yaml` to match this CHANGELOG entry's heading.
-2. Commit code: `git commit -m "feat/fix: ..."`.
-3. Push code: `git push origin main`.
-4. **Tag the release**: `git tag -a v0.1.0 -m "v0.1.0 — ..."`.
-5. **Push the tag**: `git push origin v0.1.0`. (`git push` alone doesn't push tags.)
-6. Only then tell operators to install / Update.
-
-NousViz pulls the latest semver tag — without step 4+5, install fails with `Plugin not found at tag vX.Y.Z`.
-
-### Operator workflow on first install
-
-- Install plugin → click **Trust this plugin** when the consent banner appears → hard-refresh the page once.
-- Configure credentials on the Settings tab → click **Test connection** → click **Run sync**.
-- Setup checklist guides you through the four steps; once all four are checked, the plugin is fully operational.
+2. Commit + push code.
+3. `git tag -a vX.Y.Z -m "…"` then `git push origin vX.Y.Z`.
+4. Only then Update on NousViz.

@@ -1,118 +1,15 @@
-# dashboards/overview.yaml — Overview tab for airtable-backup.
+# dashboards/overview.yaml — Airtable Backup: the single consolidated page.
 #
-# Demonstrates one of every common panel type:
-#   - stat       — numeric KPI tile
-#   - bar_chart  — declarative bar chart
-#   - table      — read-only paginated table (no sort/filter/search)
-#   - custom     — plugin-shipped React widget (frontend.components)
-#
-# Reference: docs/04-dashboards-declarative.md
+# One custom React panel (AirtableBackupApp) renders totals, the base → table
+# → record browser, the record drawer, exports and recent changes. It reads
+# /api/plugins/airtable-backup/* through apiFetch.
 
 title: Overview
 db_engine: postgres
-refresh_seconds: 60
 
 panels:
-
-  # ── KPI tiles ─────────────────────────────────────────────────────────────
-  # `stat` panels coerce values to numeric — never return TEXT here or you'll
-  # render "NaN". See appendix-gotchas.md G-14.
-
-  - id: total_items
-    type: stat
-    label: Total items
-    query: SELECT count(*) AS value FROM airt_items
-    fallback_empty: true
-
-  - id: active_items
-    type: stat
-    label: Active
-    query: SELECT count(*) AS value FROM airt_items WHERE is_active = true
-    fallback_empty: true
-
-  - id: avg_score
-    type: stat
-    label: Avg score
-    # Numeric only — `% suffix` would produce NaN. Move units to label.
-    query: SELECT ROUND(AVG(score), 1) AS value FROM airt_items WHERE score IS NOT NULL
-    fallback_empty: true
-
-  - id: last_sync_age
-    type: stat
-    label: Last sync (min ago)
-    live: true
-    refresh_seconds: 30
-    query: >
-      SELECT FLOOR(EXTRACT(EPOCH FROM (now() - MAX(completed_at))) / 60)::bigint AS value
-      FROM job_runs
-      WHERE job_id = 'sync:airtable-backup' AND status = 'success'
-    fallback_empty: true
-
-
-  # ── Bar chart ─────────────────────────────────────────────────────────────
-  # x_label / y_label propagate to the chart legend on NousViz core v0.9.4.8+.
-  # On older cores, the legend reads literal "y". See appendix-gotchas.md G-16.
-
-  - id: items_by_category
-    type: bar_chart
-    label: Items by category
-    query: >
-      SELECT
-        COALESCE(NULLIF(category, ''), '(uncategorized)') AS x,
-        count(*) AS y
-      FROM airt_items
-      GROUP BY COALESCE(NULLIF(category, ''), '(uncategorized)')
-      ORDER BY y DESC
-      LIMIT 10
-    x_key: x
-    y_key: y
-    x_label: Category
-    y_label: Items
-    fallback_empty: true
-
-
-  # ── Custom widget panel ───────────────────────────────────────────────────
-  # Render a plugin-shipped React component. The `config:` block flows
-  # verbatim to `props.config` in the widget. The widget reads its data
-  # via window.NousViz.widgets.apiFetch from `config.endpoint`.
-  #
-  # Reference: docs/05-widgets-custom-react.md
-
-  - id: kpi_avg_score_widget
+  - id: airtable_backup_app
     type: custom
-    component: AirtableBackupKpiCard
+    component: AirtableBackupApp
     config:
-      label: Average score (custom widget)
-      endpoint: "/api/plugins/airtable-backup/overview"
-      value_path: "stats.avg_score"
-      color: blue
-      sublabel: "0–100 scale"
-
-
-  # ── Table ─────────────────────────────────────────────────────────────────
-  # Declarative `table` is read-only — no sort, no filter, no search, no
-  # click-to-drill. Good for short fixed lists. For interactive tables,
-  # write a custom widget. See appendix-gotchas.md G-17.
-
-  - id: recent_items
-    type: table
-    label: Recent items (top 50)
-    query: >
-      SELECT
-        external_id,
-        name,
-        COALESCE(category, '—') AS category,
-        score,
-        CASE WHEN is_active THEN 'Yes' ELSE 'No' END AS active,
-        to_char(synced_at AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI') AS synced
-      FROM airt_items
-      ORDER BY synced_at DESC
-      LIMIT 50
-    columns:
-      - { key: external_id, label: ID }
-      - { key: name,        label: Name }
-      - { key: category,    label: Category }
-      - { key: score,       label: Score, type: number }
-      - { key: active,      label: Active }
-      - { key: synced,      label: Synced (UTC) }
-    fallback_empty: true
+      title: Airtable Backup

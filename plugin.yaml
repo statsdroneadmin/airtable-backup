@@ -1,65 +1,60 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # plugin.yaml — airtable-backup
 #
-# This is the manifest the NousViz install handler reads. Every field is
-# documented inline. Keep this file at the plugin root.
+# Backs up an Airtable account (schema, records, attachment files, optional
+# comments) into NousViz Postgres with a change log, and exports it back out
+# as CSV / JSON. Read-only toward Airtable.
 #
-# When you scaffold a new plugin via `scripts/new-plugin.sh`, every
-# `airtable-backup` / `airtable_backup` / `Example` here is rewritten to
-# your slug. Don't manually edit before running the script.
-#
-# Reference: docs/02-plugin-contract.md
+# Reference: docs/02-plugin-contract.md in the nousviz-plugin-authoring guide.
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Identity ────────────────────────────────────────────────────────────────────
-# `name` is the slug. Must match the repo name (minus a leading `plugin-`
-# if present). Lowercase, hyphens, no spaces. Used as URL prefix.
 name: airtable-backup
 display_name: Airtable Backup
 version: 0.1.0
 description: >
-  A minimal NousViz plugin scaffold demonstrating manifest, migrations,
-  sync, hooks, dashboards, and a custom widget. Replace this with what
-  your plugin actually does.
+  Back up every Airtable base your token can see (schema, records, attachment
+  files and optionally comments) with a change log, then browse or export it.
 
 license: MIT
-icon: package                      # Lucide icon name. See lucide.dev/icons.
-# Allowed categories: analytics, content, monitoring, integration,
-# productivity, compliance, premium, community. See docs/02-plugin-contract.md.
+icon: database-backup                 # Lucide icon name. See lucide.dev/icons.
 category: integration
-tags: [example, scaffold]
-# Allowed visibility values: public, public_premium, fully_private.
-# Use fully_private for first-party/internal plugins (install via direct URL only).
+tags: [airtable, backup, export, archive]
 visibility: fully_private
 
 publisher:
-  slug: your-org
-  # `name` is shown to operators on the /plugins installed-list and on the
-  # marketplace card (NousViz core v0.9.5.8 / B185). Set it to your real
-  # org or display name; placeholders like "Your Org" or "TBD" leak into
-  # the operator UI.
-  name: Your Org
-  # contact_email is optional — uncomment and set before tagging your release.
-  # contact_email: ops@your-org.example
+  slug: statsdroneadmin
+  name: StatsDrone
 
-repository: git@github.com:your-org/plugin-airtable-backup.git
+repository: git@github.com:statsdroneadmin/airtable-backup.git
 
 
 # Long description (Markdown) ─────────────────────────────────────────────────
-# Shown on the plugin page's About tab. Keep concise.
 
 long_description: |
   ## What this plugin does
 
-  Replace this paragraph with what your plugin actually does. Pull
-  data from where, render what, on what schedule.
+  Keeps a complete, self-hosted copy of your Airtable account.
+
+  - **Everything the token can see:** every base, every table's fields and
+    views, and every record. Optionally limit it to named bases.
+  - **Attachment files are downloaded**, not just linked: Airtable's
+    attachment links expire 2 hours after they're issued.
+  - **Change log:** every sync records which records were created, updated
+    (with the previous values), deleted or restored. Deleted records stay in
+    the backup.
+  - **Schema history:** field and view changes are snapshotted.
+  - **Export** any table as CSV or JSON, or a whole base as JSON.
+  - **Read-only:** the plugin never writes to Airtable.
 
   ## Setup
 
-  1. Install via the marketplace (private SSH URL).
-  2. In Settings, configure connection.
-  3. Click "Test connection" to verify.
-  4. Click "Run sync" to populate the table.
+  1. Create a Personal Access Token at airtable.com/create/tokens with scopes
+     `data.records:read` and `schema.bases:read` (add
+     `data.recordComments:read` to back up comments), and give it access to
+     the bases or workspaces to back up.
+  2. Settings → paste the token → **Test connection** → **Run sync**.
+  3. The backup then refreshes daily at 03:00 UTC.
 
 
 # Infrastructure requirements ─────────────────────────────────────────────────
@@ -70,65 +65,86 @@ requires:
 
 
 # Connections ─────────────────────────────────────────────────────────────────
-# Credentials and non-secret config the operator fills in. Secret fields
-# (password, file with secret:true) go to the encrypted `credentials` table;
-# non-secret fields go to `plugin_settings`.
-#
-# Reference: docs/02-plugin-contract.md "Connections"
 
 connections:
-  - name: example_api
+  - name: airtable
     type: api_key
     required: true
-    env_prefix: EXAMPLE_                # Legacy compat; can ignore on new plugins
-    label: Example API
+    label: Airtable
     description: >
-      Replace this with what your external API needs.
+      A Personal Access Token. Read-only use: the plugin never writes to Airtable.
     fields:
-      - name: api_key
-        label: API Key
-        type: password                  # secret — goes to credentials table
+      - name: api_token
+        label: Personal access token
+        type: password
+        secret: true
         required: true
-        description: API key from your external service.
-
-      - name: base_url
-        label: Base URL
-        type: url                       # non-secret — plugin_settings
+        description: >
+          From airtable.com/create/tokens. Scopes: data.records:read,
+          schema.bases:read (+ data.recordComments:read for comments). Stored encrypted.
+      - name: bases
+        label: Bases to include
+        type: text
         required: false
-        scheme: https
-        default: https://api.example.com
-        description: Override only for non-production endpoints.
+        description: >
+          Comma-separated base names or IDs (app…). Leave blank to back up every
+          base the token can see.
+      - name: download_attachments
+        label: Download attachment files
+        type: select
+        required: false
+        default: "yes"
+        description: >
+          Store the attachment files themselves. Airtable's attachment links
+          expire after 2 hours, so without this only file names are kept.
+        options:
+          - { label: "Yes", value: "yes" }
+          - { label: "No (metadata only)", value: "no" }
+      - name: max_attachment_mb
+        label: Max attachment size (MB)
+        type: number
+        required: false
+        default: 100
+        description: Larger files are recorded but not downloaded.
+      - name: include_comments
+        label: Back up record comments
+        type: select
+        required: false
+        default: "no"
+        description: >
+          One extra API call per record whose comments changed. Slow on large
+          bases with many comments (Airtable allows 5 requests/second per base).
+        options:
+          - { label: "No", value: "no" }
+          - { label: "Yes", value: "yes" }
 
 
 # Databases ───────────────────────────────────────────────────────────────────
-# Tables this plugin owns. Listed here so core can grant SELECT to the
-# nousviz_plugin role at install time. The `table_prefix` is convention:
-# all your tables start with this prefix to avoid collisions with sibling
-# plugins.
 
 databases:
   postgres:
-    table_prefix: airt_                   # adjust per-plugin; keep short
+    table_prefix: atb_
     tables:
-      - airt_items
-      - airt_sync_state
+      - atb_runs
+      - atb_bases
+      - atb_tables
+      - atb_schema_history
+      - atb_records
+      - atb_record_changes
+      - atb_attachments
+      - atb_comments
 
 
 # Navigation ──────────────────────────────────────────────────────────────────
-# How the plugin appears in the sidebar. Single entry = collapses to one
-# sidebar link. Multiple entries = expandable group. The path matches
-# /plugin/<slug> by default; if you have multiple dashboards, use multiple
-# entries with /plugin/<slug>/<dashboard-name> hrefs.
+# Trailing slug must match a dashboards[].name.
 
 navigation:
-  - label: Example
-    path: /plugin/airtable-backup
-    icon: Package
+  - label: Airtable Backup
+    path: /plugin/airtable-backup/overview
+    icon: DatabaseBackup
 
 
 # Dashboards ──────────────────────────────────────────────────────────────────
-# Tab definitions. Each dashboard becomes a tab on the plugin page.
-# `name` is the URL slug after /plugin/<slug>/; `file` is relative to plugin root.
 
 dashboards:
   - name: overview
@@ -137,23 +153,20 @@ dashboards:
 
 
 # Sync ────────────────────────────────────────────────────────────────────────
-# Periodic data import. See docs/06-sync-and-jobs.md.
-# `execution_mode: async` is right for almost every real plugin — runs
-# in the jobs-worker, no 10-minute HTTP cap, cancellable.
+# Full pass every run (Airtable has no "modified since" filter). Bases are
+# processed least-recently-synced first, so a run that hits the timeout still
+# advances the backup across runs.
 
 sync:
   script: src/airtable_backup_sync.py
-  schedule: "0 */6 * * *"               # every 6 hours; cron 5-field
+  schedule: "0 3 * * *"                 # daily 03:00 UTC
   supports_incremental: false
   execution_mode: async
   concurrency_policy: skip_if_running
-  timeout_seconds: 1800
+  timeout_seconds: 14400                # 4 h
 
 
 # Lifecycle hooks ─────────────────────────────────────────────────────────────
-# Python callbacks fired on plugin events. See docs/06-sync-and-jobs.md
-# "Lifecycle hooks". Each value is `<module-path>:<function-name>` relative
-# to the plugin root.
 
 hooks:
   on_credentials_saved:   hooks.lifecycle:on_credentials_saved
@@ -161,12 +174,6 @@ hooks:
 
 
 # Declarative actions ─────────────────────────────────────────────────────────
-# Buttons that appear in standard slots on the plugin page. Each fires a
-# route in api/routes.py. The route returns a `{toast, level, navigate?}`
-# dict and core renders it.
-#
-# Available slots: settings_tab_footer | plugin_page_header
-# Predicates for `disabled_when` / `visible_when`: see plugin_predicates.py
 
 actions:
   - id: test_connection
@@ -183,40 +190,35 @@ actions:
     style: primary
     icon: download
     endpoint: POST /api/plugins/airtable-backup/sync-now
-    confirm: "Trigger a full sync now?"
+    confirm: "Back up Airtable now?"
     disabled_when: sync_in_progress
 
 
 # Setup checklist ─────────────────────────────────────────────────────────────
-# Onboarding ladder shown on the plugin page until all items are done.
-# Each item's `done_if` is a predicate name; predicate definitions in
-# plugin_predicates.py.
 
 setup_checklist:
   show_until: all_done
   items:
     - id: save_credentials
-      label: Configure connection
+      label: Save your Airtable token
       done_if: credentials_saved
     - id: test_connection
       label: Verify connection — click "Test connection"
       done_if: last_test_success
     - id: first_sync
-      label: Run the first sync
+      label: Run the first backup
       done_if: first_sync_success
     - id: schedule_live
-      label: Confirm automatic sync is scheduled
+      label: Confirm the daily backup is scheduled
       done_if: schedule_active
 
 
-# Frontend components (B151, NousViz core v0.9.4+) ───────────────────────────
-# Plugin-shipped React widgets. Each `path` is relative to plugin root and
-# must end .js. Build via `cd widget && ./build.sh` — output is committed
-# to widget/dist/ so the install handler can serve it.
-#
-# Reference: docs/05-widgets-custom-react.md
+# Frontend components ─────────────────────────────────────────────────────────
+# trusted/needs_consent are required by core's install-response model.
 
 frontend:
+  trusted: false
+  needs_consent: true
   components:
-    - name: AirtableBackupKpiCard
-      path: widget/dist/AirtableBackupKpiCard.js
+    - name: AirtableBackupApp
+      path: widget/dist/AirtableBackupApp.js
