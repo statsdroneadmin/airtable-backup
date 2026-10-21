@@ -8,6 +8,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ---
 
+## [0.1.1] — Fix sync failing on start
+
+### Fixed
+
+- Every sync failed immediately with
+  `TypeError: AirtableBackupSync._start_run() got an unexpected keyword argument 'source'`.
+  An internal helper shared a name with a NousViz core method, replacing it.
+  It's renamed, and syncs now start normally.
+
+### Operator workflow
+
+- Plugins → Airtable Backup → **Update** → confirm `/api/plugins/airtable-backup/health-check`
+  shows `"version": "0.1.1"` → **Run sync**.
+
+---
+
 ## [0.1.0] — Airtable account backup
 
 ### Added

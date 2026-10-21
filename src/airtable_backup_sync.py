@@ -120,7 +120,7 @@ class AirtableBackupSync(BaseSyncScript):
             "comments_saved": 0, "errors": [],
         }
         self.progress: dict[str, Any] = {}
-        self.run_id = self._start_run()
+        self.atb_run_id = self._atb_start_run()
         status = "success"
         try:
             bases = self.client.list_bases()
@@ -141,16 +141,19 @@ class AirtableBackupSync(BaseSyncScript):
         except Cancelled:
             status = "cancelled"
         except Exception as e:
-            self._finish_run("error", str(e))
+            self._atb_finish_run("error", str(e))
             raise
-        self._finish_run(status, None)
+        self._atb_finish_run(status, None)
         log_event("info", f"Airtable backup {status}", detail={k: v for k, v in self.stats.items() if k != "errors"})
         self.log_sync_result(self.stats["records_seen"], len(self.stats["errors"]), self.stats)
         return {"rows_synced": self.stats["records_seen"], "status": status, "cancelled": status == "cancelled", **self.stats}
 
     # ── bookkeeping ──────────────────────────────────────────────────────────
+    # Helpers are `_atb_`-prefixed: BaseSyncScript has private methods of its
+    # own (_start_run, _complete_run, …) that main() calls, and a same-named
+    # method here would silently replace them.
 
-    def _start_run(self) -> int:
+    def _atb_start_run(self) -> int:
         with get_pg_conn() as conn:
             cur = conn.cursor()
             cur.execute("INSERT INTO atb_runs (job_run_id) VALUES (%s) RETURNING id", (get_run_id(),))
@@ -158,12 +161,12 @@ class AirtableBackupSync(BaseSyncScript):
             conn.commit()
         return run_id
 
-    def _finish_run(self, status: str, error: str | None) -> None:
+    def _atb_finish_run(self, status: str, error: str | None) -> None:
         with get_pg_conn() as conn:
             cur = conn.cursor()
             cur.execute(
                 "UPDATE atb_runs SET finished_at=now(), status=%s, stats=%s::jsonb, error=%s WHERE id=%s",
-                (status, _j(self.stats), error, self.run_id),
+                (status, _j(self.stats), error, self.atb_run_id),
             )
             conn.commit()
 
@@ -313,14 +316,14 @@ class AirtableBackupSync(BaseSyncScript):
                    WHERE table_id=%s AND deleted_at IS NULL
                      AND last_seen_run_id IS DISTINCT FROM %s
                    RETURNING record_id""",
-                (table_id, self.run_id),
+                (table_id, self.atb_run_id),
             )
             gone = [r[0] for r in cur.fetchall()]
             if gone and log_changes:
                 cur.executemany(
                     """INSERT INTO atb_record_changes (run_id, base_id, table_id, record_id, change_type)
                        VALUES (%s, %s, %s, %s, 'deleted')""",
-                    [(self.run_id, base_id, table_id, rid) for rid in gone],
+                    [(self.atb_run_id, base_id, table_id, rid) for rid in gone],
                 )
             self.stats["deleted"] += len(gone) if log_changes else 0
             cur.execute(
@@ -361,7 +364,7 @@ class AirtableBackupSync(BaseSyncScript):
                         """INSERT INTO atb_records (table_id, record_id, base_id, created_time, fields,
                                                     content_hash, comment_count, last_seen_run_id)
                            VALUES (%s, %s, %s, %s, %s::jsonb, %s, %s, %s)""",
-                        (table_id, rid, base_id, rec.get("createdTime"), _j(fields), h, cc, self.run_id),
+                        (table_id, rid, base_id, rec.get("createdTime"), _j(fields), h, cc, self.atb_run_id),
                     )
                     if log_changes:
                         self._change(cur, base_id, table_id, rid, "created", sorted(fields), None)
@@ -377,7 +380,7 @@ class AirtableBackupSync(BaseSyncScript):
                                   created_time=COALESCE(%s, created_time), last_changed_at=now(),
                                   last_seen_at=now(), last_seen_run_id=%s, deleted_at=NULL
                            WHERE table_id=%s AND record_id=%s""",
-                        (_j(fields), h, cc, rec.get("createdTime"), self.run_id, table_id, rid),
+                        (_j(fields), h, cc, rec.get("createdTime"), self.atb_run_id, table_id, rid),
                     )
                     kind = "restored" if was_deleted else "updated"
                     if log_changes or was_deleted:
@@ -387,7 +390,7 @@ class AirtableBackupSync(BaseSyncScript):
                     cur.execute(
                         """UPDATE atb_records SET comment_count=%s, last_seen_at=now(), last_seen_run_id=%s
                            WHERE table_id=%s AND record_id=%s""",
-                        (cc, self.run_id, table_id, rid),
+                        (cc, self.atb_run_id, table_id, rid),
                     )
                 else:
                     unchanged.append(rid)
@@ -396,7 +399,7 @@ class AirtableBackupSync(BaseSyncScript):
                 cur.execute(
                     """UPDATE atb_records SET last_seen_at=now(), last_seen_run_id=%s
                        WHERE table_id=%s AND record_id = ANY(%s)""",
-                    (self.run_id, table_id, unchanged),
+                    (self.atb_run_id, table_id, unchanged),
                 )
             conn.commit()
         return comment_targets
@@ -407,7 +410,7 @@ class AirtableBackupSync(BaseSyncScript):
             """INSERT INTO atb_record_changes (run_id, base_id, table_id, record_id, change_type,
                                               changed_field_ids, previous_fields)
                VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb)""",
-            (self.run_id, base_id, table_id, record_id, kind, field_ids,
+            (self.atb_run_id, base_id, table_id, record_id, kind, field_ids,
              _j(previous) if previous is not None else None),
         )
 

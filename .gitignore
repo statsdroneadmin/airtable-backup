@@ -31,3 +31,6 @@ Thumbs.db
 
 # Temp
 *.tmp
+
+# Downloaded by tests/run.sh (core sync.py) — not vendored
+tests/sdk_stub/nousviz_sdk/sync.py

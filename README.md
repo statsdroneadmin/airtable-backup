@@ -57,6 +57,7 @@ recent changes, and exports: a table as CSV or JSON, a whole base as JSON.
 cd widget && npm install && npm run typecheck && ./build.sh   # commit widget/dist/*.js
 ~/devhub/sdk-plugins/scripts/smoke-test.sh
 ~/devhub/sdk-plugins/scripts/preflight.sh
+tests/run.sh   # end-to-end: throwaway Postgres + fake Airtable + core's real BaseSyncScript
 ```
 
 HTTP uses stdlib `urllib` only: `requests`/`httpx` are not guaranteed on the

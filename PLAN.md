@@ -15,6 +15,36 @@ Reference: `docs/08-sop-and-discipline.md` in the parent `nousviz-plugin-authori
 
 ## Implementation phases
 
+### v0.1.1 — Fix: every sync fails with `_start_run() got an unexpected keyword argument 'source'`
+
+**Ticket.** On first install, every sync fails immediately:
+`TypeError: AirtableBackupSync._start_run() got an unexpected keyword argument 'source'`.
+Cause: core's `BaseSyncScript.main()` calls `self._start_run(source=args.source)`
+(`sdk/nousviz_sdk/sync.py:273` in nousviz/nousviz-app, defined at line 132) to
+create or adopt the `job_runs` row. Our subclass defined its own private
+`_start_run()` with no parameters, silently overriding the base method. The v0.1.0
+harness missed it because its stub `BaseSyncScript` didn't have the private
+method. No other name collides with the base class (`logger`, `_run_id`,
+`_rows_synced`, `_rows_failed`, `_details`, `_start_run`, `_complete_run`,
+`_record_standalone_success`).
+
+**Plan.**
+1. Rename the plugin's run-bookkeeping helpers to `_atb_start_run` / `_atb_finish_run`
+   and the attribute `run_id` → `atb_run_id` so nothing shadows the base class.
+2. Point the local harness at core's real `sync.py` instead of a stub, so
+   base-class collisions are caught locally from now on.
+3. Rerun the full harness; bump to 0.1.1; tag.
+
+**Test plan.**
+- [ ] Harness passes using core's real `BaseSyncScript.main()` (job_runs row created + completed)
+- [ ] On NousViz: Update plugin → `/health-check` shows `0.1.1`
+- [ ] Run sync → job reaches `success`; Overview shows bases / tables / records
+- [ ] `scripts/smoke-test.sh` + `scripts/preflight.sh` pass; `git ls-remote --tags origin` shows `v0.1.1`
+
+**CHANGELOG stub.** See `CHANGELOG.md` "[0.1.1]".
+
+---
+
 ### v0.1.0 — Airtable account backup (mirror + change log + attachments + export)
 
 **Ticket.** The operator wants a complete, self-hosted backup ("clone") of

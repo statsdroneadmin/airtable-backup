@@ -11,7 +11,7 @@
 # Identity ────────────────────────────────────────────────────────────────────
 name: airtable-backup
 display_name: Airtable Backup
-version: 0.1.0
+version: 0.1.1
 description: >
   Back up every Airtable base your token can see (schema, records, attachment
   files and optionally comments) with a change log, then browse or export it.
